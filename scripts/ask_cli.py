@@ -18,10 +18,17 @@ from app.agent import run_agentic_rag
 from app.indexer import IndexManager
 from app.indexer.vector_index import INDEX_VERSION
 from app.llm.citation_answer import build_citation_answer
+from app.reranker import CrossEncoderReranker
 from app.retriever import HybridRetriever, NaiveRetriever, RerankRetriever
+
+_MANAGER_CACHE: dict[str, IndexManager] = {}
+_RERANKER_CACHE: CrossEncoderReranker | None = None
 
 
 def load_or_build_manager(chunk_strategy: str) -> IndexManager:
+    if chunk_strategy in _MANAGER_CACHE:
+        return _MANAGER_CACHE[chunk_strategy]
+
     namespace = chunk_strategy
     index_dir = Path("data/indexes") / namespace
     settings = get_settings()
@@ -34,7 +41,8 @@ def load_or_build_manager(chunk_strategy: str) -> IndexManager:
             and metadata.get("provider_name") == "sentence-transformers"
             and metadata.get("model_name") == settings.embedding_model
         ):
-            return IndexManager.load(namespace=namespace)
+            _MANAGER_CACHE[chunk_strategy] = IndexManager.load(namespace=namespace)
+            return _MANAGER_CACHE[chunk_strategy]
         print(
             "Existing vector index is missing or uses a different embedding model; rebuilding index.",
             file=sys.stderr,
@@ -45,7 +53,15 @@ def load_or_build_manager(chunk_strategy: str) -> IndexManager:
         raise FileNotFoundError(
             f"Chunk directory not found: {chunk_dir}. Run scripts/ingest_docs.py first."
         )
-    return IndexManager.from_chunk_dir(chunk_dir, namespace=namespace)
+    _MANAGER_CACHE[chunk_strategy] = IndexManager.from_chunk_dir(chunk_dir, namespace=namespace)
+    return _MANAGER_CACHE[chunk_strategy]
+
+
+def get_reranker() -> CrossEncoderReranker:
+    global _RERANKER_CACHE
+    if _RERANKER_CACHE is None:
+        _RERANKER_CACHE = CrossEncoderReranker()
+    return _RERANKER_CACHE
 
 
 def ask(question: str, strategy: str, top_k: int, chunk_strategy: str) -> dict[str, object]:
@@ -53,7 +69,7 @@ def ask(question: str, strategy: str, top_k: int, chunk_strategy: str) -> dict[s
     manager = load_or_build_manager(chunk_strategy)
 
     if strategy == "agentic":
-        state = run_agentic_rag(question, index_manager=manager, top_k=top_k)
+        state = run_agentic_rag(question, index_manager=manager, reranker=get_reranker(), top_k=top_k)
         latency_ms = (time.perf_counter() - start) * 1000
         return {
             "answer": state.get("answer", ""),
@@ -74,7 +90,7 @@ def ask(question: str, strategy: str, top_k: int, chunk_strategy: str) -> dict[s
         retrieved = HybridRetriever(manager).retrieve(question, top_k=top_k)
         reranked = []
     elif strategy == "rerank":
-        retriever = RerankRetriever(manager)
+        retriever = RerankRetriever(manager, reranker=get_reranker())
         retrieved = retriever.retrieve_candidates(question, top_k=top_k)
         reranked = retriever.retrieve(question, top_k=top_k)
     else:

@@ -43,8 +43,6 @@ DocuPilot-RAG is an Agentic RAG and automatic evaluation system for technical do
 - Reranker sorting is metadata-aware: exact file-name matches and document-level priors affect ordering, while `rerank_score` remains the raw CrossEncoder score.
 - Low-confidence rerank results return the conservative answer `当前文档中未找到充分依据。`.
 
-Later stages will add automatic evaluation, failure analysis, Docker, and full documentation.
-
 ## Stage 5 Scope
 
 Stage 5 adds Agentic RAG with LangGraph. Unlike `naive`, `hybrid`, and `rerank`, the `agentic` strategy keeps an explicit workflow state and records its execution route.
@@ -123,6 +121,53 @@ Current Stage 5 limitations:
 - DeepEval/RAGAS evaluation is not implemented yet.
 - FastAPI `/ask` is not implemented yet.
 - MCP tooling is not part of this stage.
+
+## Stage 6 Scope
+
+Stage 6 adds command-line automatic evaluation for comparing the four retrieval strategies. It runs the same evaluation dataset through `naive`, `hybrid`, `rerank`, and `agentic`, computes lightweight custom metrics, saves raw results, and generates markdown reports.
+
+Evaluation dataset format:
+
+```json
+{
+  "id": "q001",
+  "question": "What is the core method of the CMD3 paper?",
+  "ground_truth": "CMD3 proposes Cross-Modal Decoupled Deformable Distillation for EEG-fNIRS fusion.",
+  "expected_doc": "CMD3_Cross-Modal_Decoupled_Deformable_Distillation_for_EEG-fNIRS_Fusion.pdf",
+  "expected_keywords": ["CMD3", "Cross-Modal", "Decoupled", "Deformable", "Distillation", "EEG-fNIRS"],
+  "question_type": "method"
+}
+```
+
+Supported metrics:
+
+- `hit_rate@5`: whether the expected document appears in top citations or retrieved documents.
+- `mrr`: reciprocal rank of the expected document.
+- `citation_accuracy`: whether final citations include the expected document.
+- `keyword_coverage`: expected keyword coverage in the answer and citation previews.
+- `fallback_accuracy_on_unanswerable`: computed only on samples where `question_type` is `unanswerable`; it checks whether the answer contains `当前文档中未找到充分依据。`.
+- `avg_latency_ms`: average strategy latency.
+
+Run:
+
+```bash
+python scripts/ingest_docs.py --input data/raw --chunk_strategy section
+python scripts/run_eval.py --eval_file eval_sets/sample_eval.jsonl --strategies naive hybrid rerank agentic --chunk_strategy section
+```
+
+Generated files:
+
+- `docs/eval_report.md`
+- `docs/failure_cases.md`
+- `data/eval_results/eval_<timestamp>.json`
+- `data/eval_results/eval_<timestamp>.csv`
+
+Current Stage 6 limitations:
+
+- Custom metrics are the main evaluation method.
+- DeepEval/RAGAS hooks are placeholders and are not deeply integrated yet.
+- The sample evaluation set currently contains 25 starter questions and should be expanded for stronger conclusions.
+- Metrics are intended for internal project strategy comparison.
 
 ## Project Structure
 
