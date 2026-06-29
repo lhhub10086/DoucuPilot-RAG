@@ -22,17 +22,45 @@ class Citation(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(..., min_length=1)
-    strategy: Literal["naive", "hybrid", "rerank", "agentic"] = "hybrid"
+    question: str
+    strategy: str = "agentic"
+    chunk_strategy: str = "section"
     top_k: int = Field(default=5, ge=1, le=20)
 
 
 class AskResponse(BaseModel):
     answer: str
-    citations: list[Citation] = []
+    citations: list[dict[str, Any]] = Field(default_factory=list)
     strategy: str
-    route_trace: list[str] = []
     latency_ms: float
+    retrieved_chunk_ids: list[str] = Field(default_factory=list)
+    reranked_chunk_ids: list[str] = Field(default_factory=list)
+    rewritten_question: str | None = None
+    route_trace: list[str] = Field(default_factory=list)
+    failure_reason: str | None = None
+
+
+class UploadResponse(BaseModel):
+    status: str
+    file_name: str
+    chunk_strategy: str
+    num_documents: int
+    num_chunks: int
+    message: str
+
+
+class DocumentInfo(BaseModel):
+    file_name: str
+    file_type: str
+    source_path: str
+    parsed: bool = False
+    doc_id: str | None = None
+    page_count: int | None = None
+
+
+class DocumentsResponse(BaseModel):
+    documents: list[DocumentInfo]
+    count: int
 
 
 class ParsedBlock(BaseModel):

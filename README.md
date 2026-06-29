@@ -119,7 +119,7 @@ Current Stage 5 limitations:
 - Uses rule-based graders, not LLM graders.
 - Uses rule-based query rewrite, not LLM rewrite.
 - DeepEval/RAGAS evaluation is not implemented yet.
-- FastAPI `/ask` is not implemented yet.
+- FastAPI `/ask` is provided by Stage 7.
 - MCP tooling is not part of this stage.
 
 ## Stage 6 Scope
@@ -168,6 +168,72 @@ Current Stage 6 limitations:
 - DeepEval/RAGAS hooks are placeholders and are not deeply integrated yet.
 - The sample evaluation set currently contains 25 starter questions and should be expanded for stronger conclusions.
 - Metrics are intended for internal project strategy comparison.
+
+## Stage 7 Scope
+
+Stage 7 exposes the existing CLI capabilities through FastAPI. The API layer reuses the current ingestion and RAG pipeline rather than reimplementing retrieval, reranking, Agentic RAG, or evaluation logic.
+
+Start the service:
+
+```bash
+uvicorn main:app --reload
+```
+
+Swagger UI:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+Upload and index a document:
+
+```bash
+curl -X POST http://127.0.0.1:8000/upload \
+  -F "file=@data/raw/sample.md" \
+  -F "chunk_strategy=section" \
+  -F "rebuild_index=true"
+```
+
+List documents:
+
+```bash
+curl http://127.0.0.1:8000/documents
+```
+
+Ask a question:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d "{\"question\":\"这篇文档的核心方法是什么？\",\"strategy\":\"agentic\",\"chunk_strategy\":\"section\",\"top_k\":5}"
+```
+
+Supported `/ask` strategies:
+
+- `naive`
+- `hybrid`
+- `rerank`
+- `agentic`
+
+Current Stage 7 limitations:
+
+- No frontend is included.
+- Docker is not part of this stage.
+- `/eval` remains a CLI workflow through `scripts/run_eval.py`.
+- Large uploads may take time because parsing, chunking, embedding, and index rebuild happen synchronously.
+- The first request that loads the embedding or reranker model may be slow.
 
 ## Project Structure
 
